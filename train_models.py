@@ -61,7 +61,7 @@ def train_one_model(model_name, model, strategy, Xr, yr, phi_r):
     return model
 
 
-def run_model_across_strategies(X_test, y_test, datasets, phi_test, model_name, sample=1.0):
+def run_model_across_strategies(X_test, y_test, datasets, phi_test, model_name, sample=1.0, strategies=[]):
     t0  = datetime.now()
     T_R = 0.80
     sample_tag = str(sample).replace(".", "_")
@@ -69,6 +69,8 @@ def run_model_across_strategies(X_test, y_test, datasets, phi_test, model_name, 
     os.makedirs(partial_dir, exist_ok=True)
     os.makedirs('trained',     exist_ok=True)
     os.makedirs('evaluation',  exist_ok=True)
+
+    filtered = {k: v for k, v in datasets.items() if not strategies or k in strategies}
 
     done_strategies = {
         f.replace('_metrics.pkl', '').replace('_model.pkl', '')
@@ -78,7 +80,7 @@ def run_model_across_strategies(X_test, y_test, datasets, phi_test, model_name, 
     if done_strategies:
         print(f"  [{model_name}] Resuming — skipping {len(done_strategies)} already-done strategies: {done_strategies}")
 
-    bar = tqdm(datasets.items(), desc=f'{model_name}', leave=True)
+    bar = tqdm(filtered.items(), desc=f'{model_name}', leave=True)
     print(f"\nStarted training {model_name} with {sample} portion of data.")
 
     for strategy, (Xr, yr) in bar:
@@ -89,7 +91,7 @@ def run_model_across_strategies(X_test, y_test, datasets, phi_test, model_name, 
             bar.set_postfix_str(f'{strategy} [skipped]')
             continue
 
-        phi_r      = yr.rank(pct=True)
+        phi_r       = yr.rank(pct=True)
         rare_keep   = phi_r[phi_r >= T_R].index.to_series().sample(frac=sample, random_state=42).values
         normal_keep = phi_r[phi_r <  T_R].index.to_series().sample(frac=sample, random_state=42).values
         keep        = np.concatenate([rare_keep, normal_keep])
@@ -113,7 +115,7 @@ def run_model_across_strategies(X_test, y_test, datasets, phi_test, model_name, 
 
     trained_model = {}
     model_results = {}
-    for strategy in datasets:
+    for strategy in (strategies if strategies else datasets):
         partial_model_path   = os.path.join(partial_dir, f'{strategy}_model.pkl')
         partial_metrics_path = os.path.join(partial_dir, f'{strategy}_metrics.pkl')
         with open(partial_model_path,   'rb') as f: trained_model[strategy] = pickle.load(f)
@@ -138,7 +140,7 @@ if __name__ == "__main__":
 
     # run_model_across_strategies(X_test, y_test, datasets, phi_test, 'LinearRegression')
     # run_model_across_strategies(X_test, y_test, datasets, phi_test, 'SVR', 0.00005)
-    # run_model_across_strategies(X_test, y_test, datasets, phi_test, 'SVR', 0.0002)
+    run_model_across_strategies(X_test, y_test, datasets, phi_test, 'SVR', 0.001, ['SMOTER'])
     # run_model_across_strategies(X_test, y_test, datasets, phi_test, 'SVR', 0.00001)
     # run_model_across_strategies(X_test, y_test, datasets, phi_test, 'SVR2', 0.1)
     # run_model_across_strategies(X_test, y_test, datasets, phi_test, 'SVR2', 0.05)
@@ -148,4 +150,4 @@ if __name__ == "__main__":
     # run_model_across_strategies(X_test, y_test, datasets, phi_test, 'RandomForest', 0.2)
     # run_model_across_strategies(X_test, y_test, datasets, phi_test, 'LightGBM', 0.25)
     # run_model_across_strategies(X_test, y_test, datasets, phi_test, 'LightGBM', 0.1)
-    run_model_across_strategies(X_test, y_test, datasets, phi_test, 'LightGBM')
+    # run_model_across_strategies(X_test, y_test, datasets, phi_test, 'LightGBM')
